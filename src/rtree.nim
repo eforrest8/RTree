@@ -81,8 +81,8 @@ proc newRStarTree*[M, D: Dim; RT, LT](minFill: range[30 .. 50] = 40): RStarTree[
   result.p = M * 30 div 100 # for reinsert: remove the first p entries...
   assert(result.p > 0)
 
-proc center(r: Box): auto = #BoxCenter[r.len, type(r[0].a)] =
-  var result: BoxCenter[r.len, type(r[0].a)]
+proc center[D, RT](r: Box[D, RT]): BoxCenter[D, RT] = #BoxCenter[r.len, type(r[0].a)] =
+  #var result: BoxCenter[r.len, type(r[0].a)]
   for i in 0 .. r.high:
     when r[0].a is SomeInteger:
       result[i] = (r[i].a + r[i].b) div 2
@@ -91,38 +91,38 @@ proc center(r: Box): auto = #BoxCenter[r.len, type(r[0].a)] =
     else: assert false
   return result
 
-proc distance(c1, c2: BoxCenter): auto = # squared!
+proc distance[D, RT](c1, c2: BoxCenter[D, RT]): RT = # squared!
 #proc distance(c1, c2: BoxCenter): type(c1[0]) =
-  var result: type(c1[0])
-  for i in 0 .. c1.high:
+  #var result: type(c1[0])
+  for i in 0 .. type(c1).high:
     result += (c1[i] - c2[i]) * (c1[i] - c2[i])
   return result
 
 proc overlap(r1, r2: Box): auto =
   result = type(r1[0].a)(1)
-  for i in 0 .. r1.high:
+  for i in 0 .. r1.type().high:
     result *= (min(r1[i].b, r2[i].b) - max(r1[i].a, r2[i].a))
     if result <= 0: return 0
 
 proc union(r1, r2: Box): Box =
-  for i in 0 .. r1.high:
+  for i in 0 .. r1.type().high:
     result[i].a = min(r1[i].a, r2[i].a)
     result[i].b = max(r1[i].b, r2[i].b)
 
 proc intersect(r1, r2: Box): bool =
-  for i in 0 .. r1.high:
+  for i in 0 .. r1.type().high:
     if r1[i].b < r2[i].a or r1[i].a > r2[i].b:
       return false
   return true
 
 proc area(r: Box): auto = #type(r[0].a) =
   result = type(r[0].a)(1)
-  for i in 0 .. r.high:
+  for i in 0 .. r.type().high:
     result *= r[i].b - r[i].a
 
 proc margin(r: Box): auto = #type(r[0].a) =
   result = type(r[0].a)(0)
-  for i in 0 .. r.high:
+  for i in 0 .. r.type().high:
     result += r[i].b - r[i].a
 
 # how much enlargement does r1 need to include r2
@@ -229,8 +229,8 @@ proc pickSeeds[M, D: Dim; RT, LT](t: RTree[M, D, RT, LT]; n: Node[M, D, RT, LT] 
   var i0, j0: int
   var bi, bj: type(bx)
   var largestWaste = type(bx[0].a).low
-  for i in -1 .. n.a.high:
-    for j in 0 .. n.a.high:
+  for i in -1 .. n.a.type().high:
+    for j in 0 .. n.a.type().high:
       if unlikely(i == j): continue
       if unlikely(i < 0):
         bi = bx
@@ -282,20 +282,20 @@ proc rstarSplit[M, D: Dim; RT, LT](t: RStarTree[M, D, RT, LT]; n: var Node[M, D,
   elif RT is float32:
     var m0 = 1e30 # ugly
   else:
-    var m0 = lx.b[0].a.high
+    var m0 = lx.b[0].a.type().high
   for d2 in 0 ..< 2 * D:
     let d = d2 div 2
     if d2 mod 2 == 0:
       sortPlus(n.a, lx, proc (x, y: NL): int = cmp(x.b[d].a, y.b[d].a))
     else:
       sortPlus(n.a, lx, proc (x, y: NL): int = cmp(x.b[d].b, y.b[d].b))
-    for i in t.m - 1 .. n.a.high - t.m + 1:
+    for i in t.m - 1 .. n.a.type().high - t.m + 1:
       var b = lx.b
       for j in 0 ..< i: # we can precalculate union() for range 0 .. t.m - 1, but that seems to give no real benefit. Maybe for very large M?
         b = union(n.a[j].b, b)
       var m = margin(b)
       b = n.a[^1].b
-      for j in i ..< n.a.high: # again, precalculation of tail would be possible
+      for j in i ..< n.a.type().high: # again, precalculation of tail would be possible
         b = union(n.a[j].b, b)
       m += margin(b)
       if m < m0:
@@ -309,13 +309,13 @@ proc rstarSplit[M, D: Dim; RT, LT](t: RStarTree[M, D, RT, LT]; n: var Node[M, D,
   elif RT is float32:
     var o0 = 1e30 # ugly
   else:
-    var o0 = lx.b[0].a.high
-  for i in t.m - 1 .. n.a.high - t.m + 1:
+    var o0 = lx.b[0].a.type().high
+  for i in t.m - 1 .. n.a.type().high - t.m + 1:
     var b1 = lxbest.b
     for j in 0 ..< i:
       b1 = union(nbest.a[j].b, b1)
     var b2 = nbest.a[^1].b
-    for j in i ..< n.a.high:
+    for j in i ..< n.a.type().high:
       b2 = union(nbest.a[j].b, b2)
     let o = overlap(b1, b2)
     if o < o0:
@@ -327,7 +327,7 @@ proc rstarSplit[M, D: Dim; RT, LT](t: RStarTree[M, D, RT, LT]; n: var Node[M, D,
   new result
   result.level = n.level
   result.parent = n.parent
-  for i in i0 .. n.a.high:
+  for i in i0 .. n.a.type().high:
     result.a[i - i0] = nbest.a[i]
   n.numEntries = i0 + 1
   result.numEntries = M - i0
@@ -509,10 +509,10 @@ proc reInsert[M, D: Dim; RT, LT](t: RStarTree[M, D, RT, LT]; n: var Node[M, D, R
   for i in 1 ..< n.numEntries:
     b = union(b, n.a[i].b)
   p.a[i].b = b
-  for i in M - t.p + 1 .. n.a.high:
+  for i in M - t.p + 1 .. n.a.type().high:
     buf[i] = n.a[i]
   rsinsert(t, lx, n.level)
-  for i in M - t.p + 1 .. n.a.high:
+  for i in M - t.p + 1 .. n.a.type().high:
     rsinsert(t, buf[i], n.level)
 
 proc overflowTreatment[M, D: Dim; RT, LT](t: RStarTree[M, D, RT, LT]; n: var Node[M, D, RT, LT] | var Leaf[M, D, RT, LT]; lx: L[D,
@@ -748,7 +748,7 @@ proc bestBinarySplit[M, D: Dim; RT, LT](d: array[TgsX * D, seq[LTGS[D, RT, LT]]]
   assert(m > 0) # the size of each partition.
   let np = (d[0].len + m - 1) div m # `M`, Number of partitions
   assert np == int((d[0].len.float / m.float).ceil + 0.5)
-  var cs = RT.high # Inf # Best cost found so far
+  var cs = RT.type().high # Inf # Best cost found so far
   var f, b: seq[Box[D, RT]]
   var ss: int # Best sort order
   var key: TgsSortKey[RT]
@@ -859,7 +859,7 @@ type
 proc `<`*(a, b: RTRef): bool = a.pri < b.pri
 
 proc dist[D: Dim; RT](qo: BoxCenter[D, RT]; b: Box[D, RT]): RT =
-  for i in 0 .. b.high:
+  for i in 0 .. b.type().high:
     if qo[i] < b[i].a:
       # inc(result, (b[i].a - qo[i]) ^ 2)
       result += (b[i].a - qo[i]) ^ 2
@@ -869,7 +869,7 @@ proc dist[D: Dim; RT](qo: BoxCenter[D, RT]; b: Box[D, RT]): RT =
 
 # only for testing, returns an not exact result
 proc distPlus[D: Dim; RT](qo: BoxCenter[D, RT]; b: Box[D, RT]): RT =
-  for i in 0 .. b.high:
+  for i in 0 .. b.type().high:
     if qo[i] < b[i].a:
       inc(result, (b[i].a - qo[i]) ^ 2)
     elif qo[i] > b[i].b:
@@ -877,7 +877,7 @@ proc distPlus[D: Dim; RT](qo: BoxCenter[D, RT]; b: Box[D, RT]): RT =
   return result - 13
 
 proc dist[D: Dim; RT, LT](qo: BoxCenter[D, RT]; l: L[D, RT, LT]): RT =
-  for i in 0 .. l.b.high:
+  for i in 0 .. l.b.type().high:
     if qo[i] < l.b[i].a:
       # inc(result, (l.b[i].a - qo[i]) ^ 2)
       result += (l.b[i].a - qo[i]) ^ 2
@@ -887,7 +887,7 @@ proc dist[D: Dim; RT, LT](qo: BoxCenter[D, RT]; l: L[D, RT, LT]): RT =
 
 # testing proc parameter
 proc mydist[D: Dim; RT, LT](qo: BoxCenter[D, RT]; l: L[D, RT, LT]): RT =
-  for i in 0 .. l.b.high:
+  for i in 0 .. l.b.type().high:
     if qo[i] < l.b[i].a:
       inc(result, (l.b[i].a - qo[i]) ^ 2)
     elif qo[i] > l.b[i].b:
@@ -1270,7 +1270,7 @@ when isMainModule:
 
   proc ignore(a, b: seq[RSE]): bool =
     if a.len != b.len: return false
-    for i in 0 .. a.high:
+    for i in 0 .. a.high():
       if a[i].l != b[i].l or a[i].b != b[i].b:
         return false
     return true
